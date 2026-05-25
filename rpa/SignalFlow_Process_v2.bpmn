@@ -1,0 +1,217 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+             xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+             xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+             xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+             targetNamespace="http://signalflow.ai/bpmn"
+             id="SignalFlow_Definitions">
+
+  <process id="SignalFlow_FraudDetection" name="SignalFlow AI - Fraud Procurement Detection" isExecutable="true">
+
+    <startEvent id="Start" name="Incident Data Masuk">
+      <outgoing>flow_start_ingestion</outgoing>
+    </startEvent>
+
+    <serviceTask id="IngestionAgent" name="Ingestion Agent&#10;Validasi Struktur Data">
+      <incoming>flow_start_ingestion</incoming>
+      <outgoing>flow_ingestion_gateway</outgoing>
+    </serviceTask>
+
+    <exclusiveGateway id="Gateway_Valid" name="Data Valid?">
+      <incoming>flow_ingestion_gateway</incoming>
+      <outgoing>flow_valid_yes</outgoing>
+      <outgoing>flow_valid_no</outgoing>
+    </exclusiveGateway>
+
+    <endEvent id="End_Invalid" name="Data Ditolak&#10;(Invalid)">
+      <incoming>flow_valid_no</incoming>
+    </endEvent>
+
+    <serviceTask id="ContextAgent" name="Context Agent&#10;Cek Riwayat Vendor">
+      <incoming>flow_valid_yes</incoming>
+      <outgoing>flow_context_risk</outgoing>
+    </serviceTask>
+
+    <serviceTask id="RiskAgent" name="Risk Agent&#10;Hitung Skor Risiko + AI Reasoning">
+      <incoming>flow_context_risk</incoming>
+      <outgoing>flow_risk_gateway</outgoing>
+    </serviceTask>
+
+    <exclusiveGateway id="Gateway_Risk" name="Risk Score >= 80?">
+      <incoming>flow_risk_gateway</incoming>
+      <outgoing>flow_critical_yes</outgoing>
+      <outgoing>flow_critical_no</outgoing>
+    </exclusiveGateway>
+
+    <userTask id="HumanOverride" name="Human Override&#10;Operator Review">
+      <incoming>flow_critical_yes</incoming>
+      <outgoing>flow_human_decision</outgoing>
+    </userTask>
+
+    <exclusiveGateway id="Gateway_Decision" name="Operator Decision?">
+      <incoming>flow_human_decision</incoming>
+      <outgoing>flow_approved</outgoing>
+      <outgoing>flow_rejected</outgoing>
+    </exclusiveGateway>
+
+    <endEvent id="End_Rejected" name="Incident Ditolak">
+      <incoming>flow_rejected</incoming>
+    </endEvent>
+
+    <serviceTask id="ReportingAgent_Auto" name="Reporting Agent&#10;Auto Approve + Audit Trail">
+      <incoming>flow_critical_no</incoming>
+      <outgoing>flow_auto_end</outgoing>
+    </serviceTask>
+
+    <serviceTask id="ReportingAgent_Human" name="Reporting Agent&#10;Human Approved + Audit Trail">
+      <incoming>flow_approved</incoming>
+      <outgoing>flow_human_end</outgoing>
+    </serviceTask>
+
+    <endEvent id="End_AutoApproved" name="Auto Approved&#10;Audit Trail Tersimpan">
+      <incoming>flow_auto_end</incoming>
+    </endEvent>
+
+    <endEvent id="End_HumanApproved" name="Human Approved&#10;Audit Trail Tersimpan">
+      <incoming>flow_human_end</incoming>
+    </endEvent>
+
+    <sequenceFlow id="flow_start_ingestion" sourceRef="Start" targetRef="IngestionAgent"/>
+    <sequenceFlow id="flow_ingestion_gateway" sourceRef="IngestionAgent" targetRef="Gateway_Valid"/>
+    <sequenceFlow id="flow_valid_yes" name="Valid" sourceRef="Gateway_Valid" targetRef="ContextAgent">
+      <conditionExpression xsi:type="tFormalExpression">#{data_valid == true}</conditionExpression>
+    </sequenceFlow>
+    <sequenceFlow id="flow_valid_no" name="Invalid" sourceRef="Gateway_Valid" targetRef="End_Invalid">
+      <conditionExpression xsi:type="tFormalExpression">#{data_valid == false}</conditionExpression>
+    </sequenceFlow>
+    <sequenceFlow id="flow_context_risk" sourceRef="ContextAgent" targetRef="RiskAgent"/>
+    <sequenceFlow id="flow_risk_gateway" sourceRef="RiskAgent" targetRef="Gateway_Risk"/>
+    <sequenceFlow id="flow_critical_yes" name="CRITICAL" sourceRef="Gateway_Risk" targetRef="HumanOverride">
+      <conditionExpression xsi:type="tFormalExpression">#{risk_score >= 80}</conditionExpression>
+    </sequenceFlow>
+    <sequenceFlow id="flow_critical_no" name="LOW/MEDIUM/HIGH" sourceRef="Gateway_Risk" targetRef="ReportingAgent_Auto">
+      <conditionExpression xsi:type="tFormalExpression">#{risk_score &lt; 80}</conditionExpression>
+    </sequenceFlow>
+    <sequenceFlow id="flow_human_decision" sourceRef="HumanOverride" targetRef="Gateway_Decision"/>
+    <sequenceFlow id="flow_approved" name="Approved" sourceRef="Gateway_Decision" targetRef="ReportingAgent_Human">
+      <conditionExpression xsi:type="tFormalExpression">#{decision == 'approved'}</conditionExpression>
+    </sequenceFlow>
+    <sequenceFlow id="flow_rejected" name="Rejected" sourceRef="Gateway_Decision" targetRef="End_Rejected">
+      <conditionExpression xsi:type="tFormalExpression">#{decision == 'rejected'}</conditionExpression>
+    </sequenceFlow>
+    <sequenceFlow id="flow_auto_end" sourceRef="ReportingAgent_Auto" targetRef="End_AutoApproved"/>
+    <sequenceFlow id="flow_human_end" sourceRef="ReportingAgent_Human" targetRef="End_HumanApproved"/>
+
+  </process>
+
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="SignalFlow_FraudDetection">
+
+      <bpmndi:BPMNShape id="Shape_Start" bpmnElement="Start">
+        <dc:Bounds x="80" y="200" width="36" height="36"/>
+        <bpmndi:BPMNLabel><dc:Bounds x="56" y="243" width="85" height="27"/></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_Ingestion" bpmnElement="IngestionAgent">
+        <dc:Bounds x="170" y="178" width="120" height="80"/>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_GatewayValid" bpmnElement="Gateway_Valid" isMarkerVisible="true">
+        <dc:Bounds x="345" y="193" width="50" height="50"/>
+        <bpmndi:BPMNLabel><dc:Bounds x="330" y="250" width="80" height="14"/></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_EndInvalid" bpmnElement="End_Invalid">
+        <dc:Bounds x="348" y="320" width="36" height="36"/>
+        <bpmndi:BPMNLabel><dc:Bounds x="324" y="363" width="85" height="27"/></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_Context" bpmnElement="ContextAgent">
+        <dc:Bounds x="450" y="178" width="120" height="80"/>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_Risk" bpmnElement="RiskAgent">
+        <dc:Bounds x="630" y="178" width="120" height="80"/>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_GatewayRisk" bpmnElement="Gateway_Risk" isMarkerVisible="true">
+        <dc:Bounds x="810" y="193" width="50" height="50"/>
+        <bpmndi:BPMNLabel><dc:Bounds x="793" y="250" width="85" height="27"/></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_HumanOverride" bpmnElement="HumanOverride">
+        <dc:Bounds x="920" y="80" width="120" height="80"/>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_GatewayDecision" bpmnElement="Gateway_Decision" isMarkerVisible="true">
+        <dc:Bounds x="1100" y="93" width="50" height="50"/>
+        <bpmndi:BPMNLabel><dc:Bounds x="1075" y="150" width="100" height="27"/></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_EndRejected" bpmnElement="End_Rejected">
+        <dc:Bounds x="1103" y="20" width="36" height="36"/>
+        <bpmndi:BPMNLabel><dc:Bounds x="1079" y="0" width="85" height="14"/></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_ReportingAuto" bpmnElement="ReportingAgent_Auto">
+        <dc:Bounds x="920" y="280" width="120" height="80"/>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_ReportingHuman" bpmnElement="ReportingAgent_Human">
+        <dc:Bounds x="1210" y="80" width="120" height="80"/>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_EndAuto" bpmnElement="End_AutoApproved">
+        <dc:Bounds x="1103" y="303" width="36" height="36"/>
+        <bpmndi:BPMNLabel><dc:Bounds x="1079" y="346" width="85" height="27"/></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_EndHuman" bpmnElement="End_HumanApproved">
+        <dc:Bounds x="1390" y="103" width="36" height="36"/>
+        <bpmndi:BPMNLabel><dc:Bounds x="1366" y="146" width="85" height="27"/></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNEdge id="Edge_start_ingestion" bpmnElement="flow_start_ingestion">
+        <di:waypoint x="116" y="218"/><di:waypoint x="170" y="218"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_ingestion_gateway" bpmnElement="flow_ingestion_gateway">
+        <di:waypoint x="290" y="218"/><di:waypoint x="345" y="218"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_valid_yes" bpmnElement="flow_valid_yes">
+        <di:waypoint x="395" y="218"/><di:waypoint x="450" y="218"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_valid_no" bpmnElement="flow_valid_no">
+        <di:waypoint x="370" y="243"/><di:waypoint x="370" y="320"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_context_risk" bpmnElement="flow_context_risk">
+        <di:waypoint x="570" y="218"/><di:waypoint x="630" y="218"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_risk_gateway" bpmnElement="flow_risk_gateway">
+        <di:waypoint x="750" y="218"/><di:waypoint x="810" y="218"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_critical_yes" bpmnElement="flow_critical_yes">
+        <di:waypoint x="835" y="193"/><di:waypoint x="835" y="120"/><di:waypoint x="920" y="120"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_critical_no" bpmnElement="flow_critical_no">
+        <di:waypoint x="835" y="243"/><di:waypoint x="835" y="320"/><di:waypoint x="920" y="320"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_human_decision" bpmnElement="flow_human_decision">
+        <di:waypoint x="1040" y="120"/><di:waypoint x="1100" y="120"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_approved" bpmnElement="flow_approved">
+        <di:waypoint x="1150" y="120"/><di:waypoint x="1210" y="120"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_rejected" bpmnElement="flow_rejected">
+        <di:waypoint x="1125" y="93"/><di:waypoint x="1125" y="56"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_auto_end" bpmnElement="flow_auto_end">
+        <di:waypoint x="1040" y="320"/><di:waypoint x="1103" y="320"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_human_end" bpmnElement="flow_human_end">
+        <di:waypoint x="1330" y="120"/><di:waypoint x="1390" y="120"/>
+      </bpmndi:BPMNEdge>
+
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</definitions>
