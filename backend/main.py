@@ -9,9 +9,6 @@ from supabase import create_client
 from dotenv import load_dotenv
 from uipath_client import test_connection, get_processes, trigger_process
 
-
-sys.path.append("..")
-
 from agents.ingestion_agent import IngestionAgent, IncidentInput
 from agents.context_agent import ContextAgent
 from agents.risk_agent import RiskAgent
