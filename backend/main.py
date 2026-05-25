@@ -7,13 +7,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from supabase import create_client
 from dotenv import load_dotenv
-from uipath_client import test_connection, get_processes, trigger_process
 
+# Import agent dan uipath_client (sudah dirapikan agar tidak double)
 from agents.ingestion_agent import IngestionAgent, IncidentInput
 from agents.context_agent import ContextAgent
 from agents.risk_agent import RiskAgent
 from agents.reporting_agent import ReportingAgent
 from uipath_client import test_connection, get_processes, trigger_process
+
+import uvicorn  # <--- Ini wajib di-import untuk menjalankan server di Railway
 
 load_dotenv()
 
@@ -21,7 +23,7 @@ app = FastAPI(title="SignalFlow AI", version="0.1.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=["*"],  # Sudah benar, izinkan semua untuk keperluan hackathon
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -193,3 +195,12 @@ def trigger_maestro(incident_id: str, vendor_name: str, risk_score: int):
         }
     )
     return result
+
+
+# ─── RUNNER (WAJIB UNTUK RAILWAY) ─────────────────────────
+if __name__ == "__main__":
+    # Railway akan memberikan port acak ke environment variable PORT
+    # Kita harus menangkap port tersebut, atau fallback ke 8000
+    port = int(os.environ.get("PORT", 8000))
+    # Host WAJIB "0.0.0.0" agar bisa diakses internet (Vercel)
+    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=False)
