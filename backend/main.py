@@ -8,31 +8,32 @@ from pydantic import BaseModel
 from supabase import create_client
 from dotenv import load_dotenv
 
-# Import agent dan uipath_client (sudah dirapikan agar tidak double)
+# Import agent dan uipath_client
 from agents.ingestion_agent import IngestionAgent, IncidentInput
 from agents.context_agent import ContextAgent
 from agents.risk_agent import RiskAgent
 from agents.reporting_agent import ReportingAgent
 from uipath_client import test_connection, get_processes, trigger_process
 
-import uvicorn  # <--- Ini wajib di-import untuk menjalankan server di Railway
+import uvicorn  # Wajib untuk menjalankan server
 
 load_dotenv()
 
 app = FastAPI(title="SignalFlow AI", version="0.1.0")
 
+# Setup CORS untuk mengizinkan Vercel mengakses API
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Sudah benar, izinkan semua untuk keperluan hackathon
+    allow_origins=["*"],  # Saat hackathon pakai "*" biar aman, nanti bisa diganti ke URL Vercel kamu
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+# Inisialisasi koneksi Supabase
 supabase = create_client(
     os.getenv("SUPABASE_URL"),
     os.getenv("SUPABASE_KEY")
 )
-
 
 # ─── Models ───────────────────────────────────────────────
 
@@ -41,19 +42,21 @@ class HumanDecision(BaseModel):
     action: str
     operator_note: str = ""
 
+# ─── Root & Health ────────────────────────────────────────
 
-# ─── Health ───────────────────────────────────────────────
+# WAJIB ADA: Endpoint root supaya kalau ping URL dasar tidak error 404
+@app.get("/")
+def read_root():
+    return {"message": "SignalFlow AI Backend is running gracefully! 🚀"}
 
 @app.get("/health")
 def health():
     return {"status": "ok", "service": "signalflow-ai"}
 
-
 @app.get("/test-db")
 def test_db():
     result = supabase.table("incidents").select("*").execute()
     return {"connected": True, "rows": len(result.data)}
-
 
 # ─── Agents ───────────────────────────────────────────────
 
@@ -62,12 +65,10 @@ def ingest(input: IncidentInput):
     agent = IngestionAgent()
     return agent.run(input)
 
-
 @app.get("/context/{vendor_name}")
 def get_context(vendor_name: str):
     agent = ContextAgent(supabase)
     return agent.run(vendor_name)
-
 
 @app.post("/assess-risk")
 def assess_risk(input: IncidentInput):
@@ -77,7 +78,6 @@ def assess_risk(input: IncidentInput):
         return ingestion_result
     risk = RiskAgent()
     return risk.run(ingestion_result["validated_data"])
-
 
 @app.post("/analyze")
 def analyze(input: IncidentInput):
@@ -139,7 +139,6 @@ def get_incidents():
         .execute()
     return result.data
 
-
 @app.get("/incidents/{incident_id}")
 def get_incident(incident_id: str):
     result = supabase.table("incidents") \
@@ -149,7 +148,6 @@ def get_incident(incident_id: str):
     if not result.data:
         raise HTTPException(status_code=404, detail="Incident tidak ditemukan")
     return result.data[0]
-
 
 # ─── Human Override ───────────────────────────────────────
 
@@ -175,6 +173,8 @@ def human_decision(decision: HumanDecision):
         "timestamp": datetime.utcnow().isoformat()
     }
 
+# ─── UiPath ───────────────────────────────────────────────
+
 @app.get("/test-uipath")
 def test_uipath():
     return test_connection()
@@ -196,11 +196,10 @@ def trigger_maestro(incident_id: str, vendor_name: str, risk_score: int):
     )
     return result
 
+# ─── RUNNER ───────────────────────────────────────────────
 
-# ─── RUNNER (WAJIB UNTUK RAILWAY) ─────────────────────────
 if __name__ == "__main__":
-    # Railway akan memberikan port acak ke environment variable PORT
-    # Kita harus menangkap port tersebut, atau fallback ke 8000
+    # Menangkap port dari environment atau fallback ke 8000
     port = int(os.environ.get("PORT", 8000))
-    # Host WAJIB "0.0.0.0" agar bisa diakses internet (Vercel)
+    # Host WAJIB "0.0.0.0" agar bisa diakses dari luar (Hugging Face / Vercel)
     uvicorn.run("main:app", host="0.0.0.0", port=port, reload=False)
