@@ -85,7 +85,7 @@ Do not use markdown formatting."""
         # Try Gemini first
         try:
             response = self.gemini.models.generate_content(
-                model="gemini-1.5-flash",
+                model="gemini-2.0-flash",
                 contents=prompt
             )
             return f"[Gemini] {response.text.strip()}"
